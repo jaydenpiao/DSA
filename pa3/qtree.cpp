@@ -45,8 +45,7 @@
 QTree::QTree(const PNG& imIn) {
 	this->height = imIn.height();
 	this->width = imIn.width();
-	root = BuildNode(imIn, {0,0}, {this->width -1, this->height -1});
-	
+	root = BuildNode(imIn, {0,0}, {this->width -1, this->height -1});	
 }
 
 /**
@@ -61,6 +60,7 @@ QTree& QTree::operator=(const QTree& rhs) {
     if (this == &rhs) {
         return *this;
     }
+    clearSubtree(root);
     copyTree(root, rhs.root);
     return *this;
 }
@@ -97,8 +97,7 @@ PNG QTree::Render(unsigned int scale) const {
  * @pre this tree has not previously been pruned, nor is copied from a previously pruned tree.
  */
 void QTree::Prune(double tolerance) {
-	// ADD YOUR IMPLEMENTATION BELOW
-	pruneNode(this->root, tolerance);
+    pruneNode(root, tolerance);
 }
 
 /**
@@ -172,32 +171,51 @@ void QTree::Copy(const QTree& other) {
  * @param lr lower right point of current node's rectangle.
  */
 Node* QTree::BuildNode(const PNG& img, pair<unsigned int, unsigned int> ul, pair<unsigned int, unsigned int> lr) {
-	unsigned int x1 = ul.first;
+	// Replace the line below with your implementation
+    unsigned int x1 = ul.first;
     unsigned int y1 = ul.second;
     unsigned int x2 = lr.first;
     unsigned int y2 = lr.second;
 
     if (x1 == x2 && y1 == y2) {
-        Node* curr = new Node(ul, lr, *img.getPixel(x1, y1));
-        return curr;
+        // Leaf node
+        return new Node(ul, lr, *img.getPixel(x1, y1));
     }
 
-    Node* curr = new Node(ul, lr, RGBAPixel(0, 0, 0));
+    Node* curr = new Node(ul, lr, RGBAPixel(0, 0, 0)); // Temporarily set average color to 0
     unsigned int midX = (x1 + x2) / 2;
     unsigned int midY = (y1 + y2) / 2;
+    long long totalR = 0, totalG = 0, totalB = 0;
+    int totalArea = 0;
 
-    curr->NW = BuildNode(img, ul, {midX, midY});
+    auto addChild = [&](Node*& child, pair<unsigned int, unsigned int> childUL, pair<unsigned int, unsigned int> childLR) {
+        child = BuildNode(img, childUL, childLR);
+        int childArea = (childLR.first - childUL.first + 1) * (childLR.second - childUL.second + 1);
+        totalR += static_cast<long long>(child->avg.r) * childArea;
+        totalG += static_cast<long long>(child->avg.g) * childArea;
+        totalB += static_cast<long long>(child->avg.b) * childArea;
+        totalArea += childArea;
+    };
+
+    addChild(curr->NW, ul, {midX, midY});
 
     if (x1 != x2) {
-        curr->NE = BuildNode(img, {midX + 1, y1}, {x2, midY});
+        addChild(curr->NE, {midX + 1, y1}, {x2, midY});
     }
+
     if (y1 != y2) {
-        curr->SW = BuildNode(img, {x1, midY + 1}, {midX, y2});
+        addChild(curr->SW, {x1, midY + 1}, {midX, y2});
     }
+
     if (x1 != x2 && y1 != y2) {
-        curr->SE = BuildNode(img, {midX + 1, midY + 1}, lr);
+        addChild(curr->SE, {midX + 1, midY + 1}, lr);
     }
-    curr->avg = getAvColor(curr);
+
+    // Set the average color of the current node
+    curr->avg.r = static_cast<unsigned char>(totalR / totalArea);
+    curr->avg.g = static_cast<unsigned char>(totalG / totalArea);
+    curr->avg.b = static_cast<unsigned char>(totalB / totalArea);
+
     return curr;
 }
 
@@ -206,38 +224,40 @@ Node* QTree::BuildNode(const PNG& img, pair<unsigned int, unsigned int> ul, pair
 /*********************************************************/
 
 RGBAPixel QTree::getAvColor(Node* curr) {
-	int r = 0;
-	int g = 0;
-	int b = 0;
-	int totalArea = (curr->lowRight.first - curr->upLeft.first +1) * (curr->lowRight.second - curr->upLeft.second +1);
+    long long r = 0, g = 0, b = 0;
+    int totalArea = (curr->lowRight.first - curr->upLeft.first + 1) * (curr->lowRight.second - curr->upLeft.second + 1);
 
-	if (curr->NW) {
-		int nwArea = (curr->NW->lowRight.first - curr->NW->upLeft.first +1) * (curr->NW->lowRight.second - curr->NW->upLeft.second +1);
-		r += curr->NW->avg.r * nwArea;
-		g += curr->NW->avg.g * nwArea;
-		b += curr->NW->avg.b * nwArea;
-	}
-	if (curr->NE) {
-		int neArea = (curr->NE->lowRight.first - curr->NE->upLeft.first+1) * (curr->NE->lowRight.second - curr->NE->upLeft.second+1);
-		r += curr->NE->avg.r * neArea;
-		g += curr->NE->avg.g * neArea;
-		b += curr->NE->avg.b * neArea;
-	}
-	if (curr->SW) {
-		int swArea = (curr->SW->lowRight.first - curr->SW->upLeft.first+1)* (curr->SW->lowRight.second - curr->SW->upLeft.second+1);
-		r += curr->SW->avg.r * swArea;
-		g += curr->SW->avg.g * swArea;
-		b += curr->SW->avg.b * swArea;
-	}
-	if (curr->SE) {
-		int seArea = (curr->SE->lowRight.first - curr->SE->upLeft.first+1) * (curr->SE->lowRight.second - curr->SE->upLeft.second+1);
-		r += curr->SE->avg.r * seArea;
-		g += curr->SE->avg.g * seArea;
-		b += curr->SE->avg.b * seArea;
-	}
+    // Repeat the following for NW, NE, SW, SE
+    if (curr->NW) {
+        int nwArea = (curr->NW->lowRight.first - curr->NW->upLeft.first + 1) * (curr->NW->lowRight.second - curr->NW->upLeft.second + 1);
+        r += static_cast<long long>(curr->NW->avg.r) * nwArea;
+        g += static_cast<long long>(curr->NW->avg.g) * nwArea;
+        b += static_cast<long long>(curr->NW->avg.b) * nwArea;
+    }
+    if (curr->NE) {
+        int neArea = (curr->NE->lowRight.first - curr->NE->upLeft.first + 1) * (curr->NE->lowRight.second - curr->NE->upLeft.second + 1);
+        r += static_cast<long long>(curr->NE->avg.r) * neArea;
+        g += static_cast<long long>(curr->NE->avg.g) * neArea;
+        b += static_cast<long long>(curr->NE->avg.b) * neArea;
+    }
+    if (curr->SW) {
+        int swArea = (curr->SW->lowRight.first - curr->SW->upLeft.first + 1) * (curr->SW->lowRight.second - curr->SW->upLeft.second + 1);
+        r += static_cast<long long>(curr->SW->avg.r) * swArea;
+        g += static_cast<long long>(curr->SW->avg.g) * swArea;
+        b += static_cast<long long>(curr->SW->avg.b) * swArea;
+    }
+    if (curr->SE) {
+        int seArea = (curr->SE->lowRight.first - curr->SE->upLeft.first + 1) * (curr->SE->lowRight.second - curr->SE->upLeft.second + 1);
+        r += static_cast<long long>(curr->SE->avg.r) * seArea;
+        g += static_cast<long long>(curr->SE->avg.g) * seArea;
+        b += static_cast<long long>(curr->SE->avg.b) * seArea;
+    }
 
-	RGBAPixel p(r/totalArea, g/totalArea, b/totalArea);
-	return p;
+    RGBAPixel p;
+    p.r = static_cast<unsigned char>(r / totalArea);
+    p.g = static_cast<unsigned char>(g / totalArea);
+    p.b = static_cast<unsigned char>(b / totalArea);
+    return p;
 }
 
 void QTree::copyTree(Node*& destination, const Node* source) {
@@ -272,18 +292,22 @@ void QTree::renderTree(PNG& image, const Node* current, unsigned int scale) cons
     if (current == nullptr) {
         return;
     }
-
-    if (current->NW == nullptr && current->NE == nullptr && current->SW == nullptr && current->SE == nullptr) {
-        for (unsigned int x = 0; x < scale; ++x) {
-            for (unsigned int y = 0; y < scale; ++y) {
-                *image.getPixel(scale * (current->upLeft.first) + x, scale * (current->upLeft.second) + y) = current->avg;
-            }
-        }
-    } else {
         renderTree(image, current->NW, scale);
         renderTree(image, current->NE, scale);
         renderTree(image, current->SW, scale);
         renderTree(image, current->SE, scale);
+    if (current->NW == nullptr && current->NE == nullptr && current->SW == nullptr && current->SE == nullptr) {
+        for (unsigned int left = current->upLeft.first; left <= current->lowRight.first; left++) {
+            for (unsigned int top = current->upLeft.second; top <= current->lowRight.second; top++) {
+                for (unsigned int x = 0; x < scale; ++x) {
+                    for (unsigned int y = 0; y < scale; ++y) {
+                        *image.getPixel(scale * left + x, scale * top + y) = current->avg;
+                    }
+                }
+            }
+        }
+    } else {
+
     }
 }
 
@@ -339,13 +363,22 @@ void QTree::rotateNode(Node*& current) {
     rotateNode(current->NE);
     rotateNode(current->SW);
     rotateNode(current->SE);
+
 }
 
-bool QTree::shouldPrune(Node* root, double tolerance) const {
-    if (root == nullptr) {
+bool QTree::shouldPrune(Node* node, RGBAPixel avgColor, double tolerance) const {
+    if (node == nullptr) {
         return true;
     }
-    return checkTolerance(root, root->avg, tolerance);
+    if (isLeaf(node)) {
+        return node->avg.distanceTo(avgColor) <= tolerance;
+    }
+
+    // Check all children
+    return shouldPrune(node->NW, avgColor, tolerance) &&
+           shouldPrune(node->NE, avgColor, tolerance) &&
+           shouldPrune(node->SW, avgColor, tolerance) &&
+           shouldPrune(node->SE, avgColor, tolerance);
 }
 
 bool QTree::checkTolerance(Node* root, RGBAPixel avgColor, double tolerance) const {
@@ -364,25 +397,28 @@ bool QTree::checkTolerance(Node* root, RGBAPixel avgColor, double tolerance) con
            checkTolerance(root->SE, avgColor, tolerance);
 }
 
-void QTree::pruneNode(Node*& root, double tolerance) {
-	if (root == nullptr || (root->NW == nullptr && root->NE == nullptr && root->SW == nullptr && root->SE == nullptr)) {
-        // If the node is null or a leaf, there's nothing to prune
-        return;
+void QTree::pruneNode(Node*& node, double tolerance) {
+    if (node == nullptr || isLeaf(node)) {
+        return; // Nothing to prune
+    }
+    // Check if this node should be pruned using its own average color
+    if (shouldPrune(node, node->avg, tolerance)) {
+        clearSubtree(node->NW); 
+        clearSubtree(node->NE); 
+        clearSubtree(node->SE); 
+        clearSubtree(node->SW); 
     }
 
-    if (shouldPrune(root, tolerance)) {
-        // Prune the subtree
-        clearSubtree(root->NW);
-        clearSubtree(root->NE);
-        clearSubtree(root->SW);
-        clearSubtree(root->SE);
-    } else {
-        // Recursively prune child nodes
-        pruneNode(root->NW, tolerance);
-        pruneNode(root->NE, tolerance);
-        pruneNode(root->SW, tolerance);
-        pruneNode(root->SE, tolerance);
-    }
+    // Recursively prune child nodes first
+    pruneNode(node->NW, tolerance);
+    pruneNode(node->NE, tolerance);
+    pruneNode(node->SW, tolerance);
+    pruneNode(node->SE, tolerance);
+}
+
+bool QTree::isLeaf(Node* node) const {
+    return node->NW == nullptr && node->NE == nullptr && 
+           node->SW == nullptr && node->SE == nullptr;
 }
 
 void QTree::clearSubtree(Node*& root) {

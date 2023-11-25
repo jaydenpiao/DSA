@@ -243,7 +243,6 @@ private:
     unsigned int CountLeaves(Node* nd) const;
 
     /* =================== end of private PA3 functions ============== */
-
     /**
      * If you require more private member attributes and/or private functions,
      * declare them in qtree-private.h
